@@ -1,0 +1,99 @@
+INSTRUCTIONS:
+
+
+1 =========================
+Install QT, OGDF, MySQL
+
+2 =========================
+Place one entry for each flot detected in the network (TCP, UDP and ICMP) in a Mysql table.
+Use the following schema (in this case the table is names pcap_darpa)
+TABLE `pcap_darpa` (
+  `timestamp` bigint(15) NOT NULL,
+  `sip` varchar(18) DEFAULT NULL,
+  `dip` varchar(18) DEFAULT NULL,
+  `sport` int(11) DEFAULT NULL,
+  `dport` int(11) DEFAULT NULL,
+  `proto` tinyint(4) NOT NULL,
+  `dip2sip_pk` int(11) DEFAULT NULL,
+  `dip2sip_byte` int(11) DEFAULT NULL,
+  `sip2dip_pk` int(11) DEFAULT NULL,
+  `sip2dip_byte` int(11) DEFAULT NULL,
+  KEY `timestamp` (`timestamp`),
+  KEY `proto` (`proto`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+
+3 =========================
+Insert in the table 'snortlog' in the same db with the following schema and populate it with the snort logs of the traces.
+Note: timestamps among point 3 and 2 must be aligned!
+CREATE TABLE `snortlog` (
+  `timestamp` bigint(15) DEFAULT NULL,
+  `classification` tinyint(3) DEFAULT NULL,
+  `snortname` varchar(100) DEFAULT NULL,
+  KEY `timestamp` (`timestamp`),
+  KEY `snortname` (`snortname`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+
+4 =========================
+Create the tables 'hist_template' and 'timestamp_list' as:
+
+CREATE TABLE `hist_template` (
+  `timestamp` bigint(15) DEFAULT NULL,
+  `proto` tinyint(4) DEFAULT NULL,
+  `type_of_hist` tinyint(4) DEFAULT NULL,
+  `bin` varchar(15) DEFAULT NULL,
+  `counter` int(11) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+CREATE TABLE `timestamp_list` (
+  `timestamp` bigint(15) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+5 =========================
+Make and run the files inside the folder Mysql_create_hist_n_entropy/ (Mysql++ is requested).
+Modify the cpp file to fit your db name, host, password and tables
+
+6 =========================
+Create the table 'entropies' as
+CREATE TABLE `entropies` (
+  `timestamp` bigint(15) DEFAULT NULL,
+  `proto` tinyint(4) DEFAULT NULL,
+  `type_of_hist` tinyint(4) DEFAULT NULL,
+  `entropy` float DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+6 =========================
+Make and run the files inside the folder entropy/ (Mysql++ is requested).
+Modify the cpp file to fit your db name, host, password and tables
+
+7 =========================
+Create the tables
+
+CREATE TABLE `anomaly_score` (
+  `timestamp` int(15) DEFAULT NULL,
+  `n_basis` tinyint(4) DEFAULT NULL,
+  `score` float DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+CREATE TABLE `eigenvalues` (
+  `n_basis` int(11) DEFAULT NULL,
+  `eigenvalue` float DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+
+8 =========================
+Compute the PCA of entropy values, using BLAS libraries (see the paper).
+Then, places the anomaly score (norm of the difference between the original vector and the reconstructed one, for each timestamp) in the first table, and the eigenvalues energy in the second one.
+
+
+9 =========================
+Download and insert the hostip database (see the paper reference)
+
+10=========================
+Go into the Folder TVi/ and open the project file.
+Modify the .pro file, according to your path
+Modify the db_credential.h file, according to your MySQL DB and your paths
+
+11 =========================
+Compile and run it!

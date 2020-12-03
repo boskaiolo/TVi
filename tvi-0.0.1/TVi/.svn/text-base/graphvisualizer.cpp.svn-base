@@ -1,0 +1,571 @@
+#include "graphvisualizer.h"
+
+#include <QDebug>
+#include <QProgressDialog>
+#include <QSqlQuery>
+#include <QVariant>
+#include <QString>
+
+
+#include <boost/graph/fruchterman_reingold.hpp>
+#include <boost/graph/random_layout.hpp>
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/topology.hpp>
+#include <boost/lexical_cast.hpp>
+#include <string>
+#include <iostream>
+#include <map>
+#include <vector>
+#include <boost/random/linear_congruential.hpp>
+#include <boost/progress.hpp>
+#include <boost/shared_ptr.hpp>
+#include <GLUT/glut.h>
+
+#include "pixel2gl.h"
+#include "db_credential.h"
+#include "tools.h"
+
+
+#define GLUT_FONT GLUT_BITMAP_8_BY_13
+#define GLUT_FONT_HEIGHT 14
+
+
+using namespace boost;
+
+typedef boost::rectangle_topology<> topology_type;
+typedef topology_type::point_type point_type;
+typedef adjacency_list<listS, vecS, undirectedS, property<vertex_name_t, std::string> > Graph;
+typedef graph_traits<Graph>::vertex_descriptor Vertex;
+typedef std::map<std::string, Vertex> NameToVertex;
+
+
+Vertex get_vertex(const std::string& name, Graph& g, NameToVertex& names)
+{
+  NameToVertex::iterator i = names.find(name);
+  if (i == names.end())
+    i = names.insert(std::make_pair(name, add_vertex(name, g))).first;
+  return i->second;
+}
+
+class progress_cooling : public linear_cooling<double>
+{
+  typedef linear_cooling<double> inherited;
+
+ public:
+  explicit progress_cooling(std::size_t iterations) : inherited(iterations)
+  {
+    display.reset(new progress_display(iterations + 1, std::cerr));
+  }
+
+  double operator()()
+  {
+    ++(*display);
+    return inherited::operator()();
+  }
+
+ private:
+  shared_ptr<boost::progress_display> display;
+};
+
+
+
+void graphVisualizer::computeLayout()
+{
+    int iterations = 100;
+    double width = GL_W-2;
+    double height = GL_H-2;
+
+    Graph g;
+    NameToVertex names;
+
+
+    this->node_name.clear();
+    this->node_pos_x.clear();
+    this->node_pos_y.clear();
+
+
+
+
+    for (size_t i = 0; i< this->who_1_orig.size(); i++)
+    {
+        add_edge(get_vertex(this->who_1_orig[i].toStdString().c_str(), g, names), get_vertex(this->who_2_orig[i].toStdString().c_str(), g, names), g);
+    }
+
+
+    typedef std::vector<point_type> PositionVec;
+    PositionVec position_vec(num_vertices(g));
+    typedef iterator_property_map<PositionVec::iterator, property_map<Graph, vertex_index_t>::type> PositionMap;
+    PositionMap position(position_vec.begin(), get(vertex_index, g));
+
+    minstd_rand gen;
+    topology_type topo(gen, -width/2, -height/2, width/2, height/2);
+    random_graph_layout(g, position, topo);
+    fruchterman_reingold_force_directed_layout(g, position, topo, cooling(progress_cooling(iterations)));
+
+    graph_traits<Graph>::vertex_iterator vi, vi_end;
+    for (tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi) {
+      std::cout << get(vertex_name, g, *vi) << '\t' << position[*vi][0] << '\t' << position[*vi][1] << std::endl;
+
+      this->node_name.push_back(get(vertex_name, g, *vi));
+      this->node_pos_x.push_back((double) position[*vi][0]);
+      this->node_pos_y.push_back((double) position[*vi][1]);
+
+    }
+
+    position_vec.clear();
+    g.clear();
+    names.clear();
+
+}
+
+
+
+
+
+
+graphVisualizer::graphVisualizer(QWidget *parent)
+    : QGLWidget(QGLFormat(QGL::SampleBuffers), parent)
+{
+    db = QSqlDatabase::addDatabase("QMYSQL", "graph_mysql_connection");
+    db.setHostName(DB_host);
+    db.setDatabaseName(DB_name);
+    db.setUserName(DB_user);
+    db.setPassword(DB_pass);
+   // db.transaction();
+
+    if (!db.open()) qDebug() << "Failed to connect to root mysql admin";
+
+    this->graph_selected = 0;
+    this->timestamp_init = 0;
+    this->timestamp_end = 0;
+    this->clear_who_vectors();
+    this->filter_port_begin = 80;
+    this->filter_port_end = 80;
+
+
+    is_selection_mode_opengl = false;
+    this->setMouseTracking(true);
+
+    selectBuf = (GLuint*) malloc(sizeof(GLuint) * 20000);
+    bufsize = sizeof(GLuint) * 20000;
+    this->selected_obj = -1;
+}
+
+graphVisualizer::~graphVisualizer()
+{
+    this->clear_who_vectors();
+    db.close();
+}
+
+
+
+void graphVisualizer::initializeGL()
+{
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glLoadIdentity();
+    glEnable(GL_BLEND);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+
+    glTranslatef(0.0f, 0.0f, -GL_H/2);
+
+
+    if (GL_H != GL_W) {
+        qFatal("[graphvisualizer] look at the define: GL_H and GL_W MUST BE EQUAL!!!!");
+    }
+
+ }
+
+void graphVisualizer::resizeGL(int width, int height)
+ {
+    this->width = width;
+    this->height = height;
+
+    glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glFrustum(-1.0, 1.0, -1.0, 1.0, 1.0, 100.0);
+    glMatrixMode(GL_MODELVIEW);
+ }
+
+
+void graphVisualizer::search_position_from_names(std::string node1name, std::string node2name, double * pos_1_x, double * pos_1_y, double * pos_2_x, double * pos_2_y)
+{
+    for (int i=0; i<this->node_name.size(); i++)
+    {
+        if (node1name.compare(this->node_name[i]) == 0 )
+        {
+            *pos_1_x = this->node_pos_x[i];
+            *pos_1_y = this->node_pos_y[i];
+        }
+
+        if (node2name.compare(this->node_name[i]) == 0 )
+        {
+            *pos_2_x = this->node_pos_x[i];
+            *pos_2_y = this->node_pos_y[i];
+        }
+
+    }
+}
+
+
+void graphVisualizer::mousePressEvent(QMouseEvent *event)
+{
+    this->click.setX(event->x());
+    this->click.setY(event->y());
+    this->is_selection_mode_opengl = true;
+
+    repaint();
+}
+
+
+void graphVisualizer::mouseMoveEvent(QMouseEvent *event)
+{
+    repaint();
+}
+
+
+
+void graphVisualizer::paintGL_graph()
+{
+
+
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    glPointSize(10.0f);
+    for (int c=0; c<this->node_name.size(); c++)
+    {
+        glPushMatrix();
+        glPushName(c);
+
+        glBegin(GL_POINTS);
+        glVertex3f(this->node_pos_x[c], this->node_pos_y[c], 0.0f);
+        glEnd();
+
+        glPopName();
+        glPopMatrix();
+
+    }
+    glPointSize(1.0f);
+
+    glColor4f(1.0f, 1.0f, 1.0f, 0.8f);
+
+    double pos_1_x, pos_1_y, pos_2_x, pos_2_y;
+
+
+    for (int c=0; c<this->who_1_orig.size(); c++)
+    {
+
+        glPushMatrix();
+        glPushName(c+this->node_name.size());
+
+        int max_ct = this->max_count_links();
+
+        glLineWidth(5.0 * (float) count_links[c] /(float)max_ct);
+
+        this->search_position_from_names(this->who_1_orig[c].toStdString(), this->who_2_orig[c].toStdString(), &pos_1_x, &pos_1_y, &pos_2_x, &pos_2_y);
+
+        glBegin(GL_LINES);
+        glVertex3f(pos_1_x, pos_1_y, 0.0f);
+        glVertex3f(pos_2_x, pos_2_y, 0.0f);
+        glEnd();
+
+
+        glPopName();
+        glPopMatrix();
+
+
+    }
+
+    glLineWidth(1.0);
+
+
+}
+
+
+int graphVisualizer::max_count_links()
+{
+    int m = -1;
+
+    for (size_t i = 0; i<this->count_links.size(); i++)
+        if (this->count_links[i] > m)
+            m = this->count_links[i];
+
+    return m;
+}
+
+
+
+void graphVisualizer::writeLabels()
+{
+    if (this->selected_obj < 0 || this->node_name.empty() || this->who_1_orig.empty() )
+        return;
+
+    // selected node
+    if (this->selected_obj < this->node_name.size()) {
+        this->renderBitmapString("Click onto node: " + this->node_name[this->selected_obj], -2, -4.85);
+    }
+    // selected link
+    else
+    {
+        int c = this->selected_obj - this->node_name.size();
+        this->renderBitmapString("Click onto link " + this->who_1_orig[c].toStdString() + " and "+ this->who_2_orig[c].toStdString() + " #=" + int2str(count_links[c]), -2, -4.85);
+
+    }
+
+
+
+
+}
+
+
+void graphVisualizer::renderBitmapString(std::string txt, float x, float y)
+{
+    glRasterPos3f(x, y,0);
+    for (size_t c = 0; c<txt.length(); c++) {
+      glutBitmapCharacter(GLUT_FONT, txt[c]);
+    }
+}
+
+
+
+void graphVisualizer::paintGL()
+{
+
+    glMatrixMode(GL_MODELVIEW);
+
+
+    if (this->is_selection_mode_opengl)
+        this->startPicking(click.x(), click.y());
+
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    paintGL_graph();
+    writeLabels();
+
+
+    if (this->is_selection_mode_opengl)
+        this->stopPicking();
+
+    glutSwapBuffers();
+
+}
+
+
+void graphVisualizer::draw_graph_feature(int feat, int port_init, int port_end)
+{
+    this->graph_selected = feat;
+    this->filter_port_begin = port_init;
+    this->filter_port_end = port_end;
+
+    fetch_data();
+    computeLayout();
+    repaint();
+
+}
+
+void graphVisualizer::time_clicked(int timestamp_init, int timestamp_end)
+{
+
+    this->timestamp_init = timestamp_init;
+    this->timestamp_end = timestamp_end;
+    if (timestamp_init == timestamp_end)
+        this->timestamp_end += DB_DELTA_HIST;
+
+    repaint();
+}
+
+
+
+// Fetch the histograms of the features for every timestamp between init and end
+void graphVisualizer::fetch_data()
+{
+
+
+    this->clear_who_vectors();
+
+
+    if (this->isHidden() == true)
+        return;
+
+
+    QProgressDialog * progress = new QProgressDialog(this);
+    progress->setLabelText("Fetching data from MySql DB");
+    progress->setRange(0, 2);
+    progress->setMinimumDuration (1);
+    progress->setValue(1);
+    progress->setModal(true);
+
+    if (!db.open()) qDebug() << "Failed to connect to root mysql admin";
+    QSqlQuery q;
+
+    QString qstr;
+
+    switch (this->graph_selected) {
+        case 0:
+        qstr = QString("SELECT sip, dip, count(0) FROM ") + QString(DB_PCAP_TABLE) + QString(" WHERE proto = 6 AND (( sport>=")  + QString(int2str(this->filter_port_begin)) + QString(" and sport<= ") + QString(int2str(this->filter_port_end)) + \
+               QString (") OR ( dport>=") + QString(int2str(this->filter_port_begin)) + QString(" and dport<= ") + QString(int2str(this->filter_port_end)) + QString(")) AND timestamp >= ") + QString(int2str(this->timestamp_init)) + \
+               QString(" AND timestamp <= ") + QString(int2str(this->timestamp_end)) + QString(" GROUP BY sip, dip;");
+        break;
+        case 1:
+        qstr = QString("SELECT  sip, dip, count(0) FROM ") + QString(DB_PCAP_TABLE) + QString(" WHERE proto =17 AND (( sport>=")  + QString(int2str(this->filter_port_begin)) + QString(" and sport<= ") + QString(int2str(this->filter_port_end)) + \
+               QString (") OR ( dport>=") + QString(int2str(this->filter_port_begin)) + QString(" and dport<= ") + QString(int2str(this->filter_port_end)) + QString(")) AND timestamp >= ") + QString(int2str(this->timestamp_init)) + \
+               QString(" AND timestamp <= ") + QString(int2str(this->timestamp_end)) + QString(" GROUP BY sip, dip;");
+        break;
+        case 2:
+        qstr = QString("SELECT sip, dip, count(0) FROM ") + QString(DB_PCAP_TABLE) + QString(" WHERE proto = 1 AND timestamp >= ") + QString(int2str(this->timestamp_init)) + \
+               QString(" AND timestamp <= ") + QString(int2str(this->timestamp_end)) + QString(" GROUP BY sip, dip;");
+        break;
+    default:
+        qWarning() << "ERROR IN QUERY GRAPH NUMBER!!!!!";
+        break;
+
+    }
+
+
+    q = db.exec(qstr);
+
+    if (q.size() > 0)
+    {
+        q.seek(-1);
+        //int c=1;
+        while ( q.next() )
+        {
+            who_1_orig.push_back(q.value(0).toString());
+            who_2_orig.push_back(q.value(1).toString());
+            this->count_links.push_back(q.value(2).toInt());
+            //who_1_renamed.push_back(int2str(-1*c));
+            //who_2_renamed.push_back(int2str(c));
+            //c++;
+        }
+    }
+    else
+    {
+        qWarning() <<  "Empty table with query " << qstr;
+    }
+
+    progress->~QProgressDialog();
+
+    this->print_vectors();
+    std::cout << qstr.toStdString() << std::endl;
+
+
+}
+
+
+
+void graphVisualizer::clear_who_vectors()
+{
+    who_1_orig.clear();
+    who_2_orig.clear();
+    //who_1_renamed.clear();
+    //who_2_renamed.clear();
+}
+
+
+void graphVisualizer::print_vectors()
+{
+    for (size_t i = 0; i< this->who_1_orig.size(); i++)
+    {
+        //std::cout << who_1_orig[i].toStdString() << "\t" << who_2_orig[i].toStdString() << "\t  || "<< who_1_renamed[i].toStdString() << "\t" << who_2_renamed[i].toStdString() << std::endl;
+        std::cout << who_1_orig[i].toStdString() << " \t" << who_2_orig[i].toStdString() << "  # = " << count_links[i] << std::endl;
+    }
+}
+
+
+
+
+
+
+void graphVisualizer::startPicking(int x, int y)
+{
+
+    std::cout << "Start picking" << std::endl;
+    GLint viewport[4];
+    float ratio;
+    glSelectBuffer(bufsize, selectBuf);
+    glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    glRenderMode(GL_SELECT);
+    glInitNames();
+
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluPickMatrix(x, viewport[3]-y, 5, 5, viewport);
+    glFrustum(-1.0, 1.0, -1.0, 1.0, 1.0, 100.0);
+    glMatrixMode(GL_MODELVIEW);
+ }
+
+
+
+void graphVisualizer::stopPicking()
+{
+    std::cout << "Stop picking" << std::endl;
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glFlush();
+    GLint hits = glRenderMode(GL_RENDER);
+    if (hits != 0){
+            processHits2(hits,selectBuf,0);
+            std::cout << "Stop picking processHit" << std::endl;
+    }
+    else{
+    }
+
+
+
+    this->is_selection_mode_opengl = false;
+
+    this->resizeGL(width, height);
+
+}
+
+
+void graphVisualizer::processHits2 (GLint hits, GLuint buffer[], int sw)
+{
+
+   GLint i, j, numberOfNames=0;
+   GLuint names, *ptr=NULL, minZ,*ptrNames=NULL;
+
+   ptr = (GLuint *) buffer;
+   minZ = 0xffffffff;
+   for (i = 0; i < hits; i++) {
+      names = *ptr;
+          ptr++;
+          if (*ptr < minZ) {
+                  numberOfNames = names;
+                  minZ = *ptr;
+                  ptrNames = ptr+2;
+          }
+
+          ptr += names+2;
+        }
+   if (numberOfNames > 0) {
+          printf ("You picked object  ");
+          ptr = ptrNames;
+          selected_obj = INT_MAX;
+          for (j = 0; j < numberOfNames; j++,ptr++) {
+                 printf ("PICKING!!!!  %d\n", *ptr);
+                 if (selected_obj > (int) *ptr )
+                     selected_obj = (int) *ptr;
+                }
+        }
+   else
+   {
+           printf("You click a object without name!");
+           selected_obj = -1;
+       }
+
+   printf ("\n");
+
+
+   return;
+
+}
+

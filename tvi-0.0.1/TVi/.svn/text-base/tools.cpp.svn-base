@@ -1,0 +1,274 @@
+#include "tools.h"
+
+
+#include <iostream>
+#include <sstream>
+#include <cmath>
+#include <math.h>
+#include <iostream>
+
+
+int factorial(int number) {
+        int temp;
+
+        if(number <= 1) return 1;
+
+        temp = number * factorial(number - 1);
+        return temp;
+}
+
+
+
+char * int2str(int n)
+{
+
+    static char s[1000];
+
+    sprintf(s, "%d", n);
+
+    return &s[0];
+
+}
+
+
+char * double2str(double number)
+{
+   std::stringstream ss;
+   ss.precision(5);
+   ss.setf(std::ios::scientific);
+   ss << number;
+   return (char *) ss.str().c_str();
+}
+
+
+
+double find_max (std::vector<double> *v) {
+
+    double max = 0;
+
+    for (size_t i=0; i<(*v).size(); i++) {
+        if ((*v)[i]>max){
+            max = (*v)[i];
+        }
+    }
+
+    return max;
+}
+
+
+std::string int2stdstr(int number)
+{
+   std::stringstream ss;
+   ss << number;
+   return ss.str();
+}
+
+
+std::string float2stdstr(float number)
+{
+   std::stringstream ss;
+   ss << number;
+   return ss.str();
+}
+
+#define MIN(a,b) (a<b?a:b)
+#define MAX(a,b) (a>b?a:b)
+/* Input:   r, g, b in range [0..1]
+   Outputs: h, s, v in range [0..1]
+*/
+void rgb2hsv(float r, float g, float b, float *h, float *s, float *v)
+{
+  float max = MAX (r, MAX (g, b)), min = MIN (r, MIN (g, b));
+  float delta = max - min;
+
+  *v = max;
+  if (max != 0.0)
+    *s = delta / max;
+  else
+    *s = 0.0;
+  if (*s == 0.0) *h = -1;
+  else {
+    if (r == max)
+      *h = (g - b) / delta;
+    else if (g == max)
+      *h = 2 + (b - r) / delta;
+    else if (b == max)
+      *h = 4 + (r - g) / delta;
+    *h *= 60.0;
+    if (*h < 0) *h += 360.0;
+    *h /= 360.0;
+  }
+}
+
+/*
+ *----------------------------------------------------------
+ *
+ *  hsv2rgb:  Converts a color specified in the HSV system
+ *            to the RGB system.
+ *
+ *  On input:  h = Hue in the range 0 to 1 (degrees/360),
+ *                 where red, green, and blue correspond
+ *                 to h = 0, h = 120, and h = 240, respec-
+ *                 tively.
+ *
+ *             s = Saturation value in [0,1], where s = 0
+ *                 implies greyscale (h is irrelevant and
+ *                 r = g = b = v), and s = 1 implies a
+ *                 pure hue (at least one of r, g, and b
+ *                 is 0).
+ *
+ *             v = Value of intensity in [0,1], where
+ *                 v = 0 implies black, and v = 1 implies
+ *                 the maximum brightness.
+ *
+ *  A multiple of 360 is added to h if necessary, and the
+ *  values of s and v are clamped to the interval [0,1].
+ *
+ *  On output:  r,g,b = Red, green, and blue color compo-
+ *                      nents in the range [0,1].
+ *
+ *  glsurf functions called:  None
+ *  OpenGL functions called:  None
+ *
+ *----------------------------------------------------------
+ */
+void hsv2rgb(float h, float s, float v, float *r, float *g, float*b)
+{
+   int i;         /* Integer part of h/60 */
+   float f;       /* Fractional part of h/60 */
+   float p,q,t;   /* Scaled down intensities */
+
+   h = h*360;
+
+   while (h < 0.0) {   /* Adjust h if necessary */
+      h += 360.0;
+   }
+   while (h >= 360.0) {
+      h -= 360.0;
+   }
+   if (s < 0.0) {      /* Clamp s to [0,1] */
+      s = 0.0;
+   } else {
+   if (s > 1.0) {
+      s = 1.0;
+   }}
+
+   if (v < 0.0) {      /* Clamp v to [0,1] */
+      v = 0.0;
+   } else {
+   if (v > 1.0) {
+      v = 1.0;
+   }}
+
+   h /= 60.0;     /* Map h to [0,6), and compute i and f */
+   i = (int) h;
+   f = h - (float) i;
+
+   p = v*(1.0 - f*s);        /* Compute p, q, and t */
+   q = v*(1.0 - (1.0-f)*s);
+   t = v*(1.0 - s);
+   switch (i) {
+   case 0:
+      *r = v;  *g = q;  *b = t;
+      break;
+   case 1:
+      *r = p;  *g = v;  *b = t;
+      break;
+   case 2:
+      *r = t;  *g = v;  *b = q;
+      break;
+   case 3:
+      *r = t;  *g = p;  *b = v;
+      break;
+   case 4:
+      *r = q;  *g = t;  *b = v;
+      break;
+   case 5:
+      *r = v;  *g = t;  *b = p;
+      break;
+   default:
+      break;
+   }
+   return;
+}
+
+
+
+
+
+/////////////////////////////cut////////////////////////////////
+/*
+*HilbertMap()
+*  Takes a value in between 0 and 1-4^(-depth).
+*  Output written to *xout and *yout.
+*  depth is the order of the curve (12 is sub-pixel for most modern
+displays).
+*  exit used internally, leave at 0 calling externally
+*/
+void HilbertMap(double in, double *xout, double *yout, int depth, int exit)
+{
+ double x,y;
+ int opt=(int)floor(fabsf(in)*4);
+ if(depth<=0)
+ {
+  switch (exit)
+  {
+    case 0:
+      x= 0.5;
+      y= 0.0;
+    break;
+    case 1:
+      x= 0.0;
+      y=-0.5;
+    break;
+  }
+  switch(opt)
+  {
+    case 0:
+      *xout=.25;
+      *yout=.25+.5*(4*in-opt);
+    break;
+    case 1:
+      *xout=.25+.5*(4*in-opt);
+      *yout=.75;
+    break;
+    case 2:
+      *xout=.75;
+      *yout=.75-.5*(4*in-opt);
+    break;
+    case 3:
+    default :
+      *xout=.75+x*(4*in-opt);
+      *yout=.25+y*(4*in-opt);
+    break;
+  }
+  return;
+ }
+ else
+ {
+  switch(opt)
+  {
+    case 0:
+      HilbertMap(4*fabsf(in)-opt,&x,&y,depth-1,0);
+      *xout=0.0+0.5*y;
+      *yout=0.0+0.5*x;
+    break;
+    case 1:
+      HilbertMap(4*fabsf(in)-opt,&x,&y,depth-1,0);
+      *xout=0.0+0.5*x;
+      *yout=0.5+0.5*y;
+    break;
+    case 2:
+      HilbertMap(4*fabsf(in)-opt,&x,&y,depth-1,1);
+      *xout=0.5+0.5*x;
+      *yout=0.5+0.5*y;
+    break;
+    case 3:
+    default :
+      HilbertMap(4*fabsf(in)-opt,&x,&y,depth-1,1-exit);
+      *xout=1.0-0.5*y;
+      *yout=0.5-0.5*x;
+    break;
+  }
+ }
+}

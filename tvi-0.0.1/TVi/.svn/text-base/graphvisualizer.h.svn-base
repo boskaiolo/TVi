@@ -1,0 +1,86 @@
+#ifndef GRAPHVISUALIZER_H
+#define GRAPHVISUALIZER_H
+
+#include <QGLWidget>
+#include <QSqlDatabase>
+#include <QMouseEvent>
+#include <QString>
+#include <vector>
+
+
+
+class graphVisualizer : public QGLWidget
+{
+    Q_OBJECT
+public:
+    graphVisualizer(QWidget *parent = 0);
+    ~graphVisualizer();
+
+
+protected:
+    void initializeGL();
+    void paintGL();
+    void resizeGL(int width, int height);
+    void mousePressEvent(QMouseEvent *event);
+    void mouseMoveEvent(QMouseEvent *event);
+
+public slots:
+    void graph_is_active(bool yes) {yes==true? this->setHidden(false): this->setHidden(true); this->repaint();}
+    void draw_graph_feature(int, int, int);
+    void time_clicked(int, int);
+
+
+
+
+
+private:
+    QSqlDatabase db;
+
+
+
+
+    int timestamp_init;
+    int timestamp_end;
+
+
+    int filter_port_begin;
+    int filter_port_end;
+    int graph_selected;
+
+    std::vector<QString> who_1_orig;
+    std::vector<QString> who_2_orig;
+    std::vector<int> count_links;
+    //std::vector<QString> who_1_renamed;
+    //std::vector<QString> who_2_renamed;
+    std::vector<std::string> node_name;
+    std::vector<double> node_pos_x;
+    std::vector<double> node_pos_y;
+
+
+    int height;
+    int width;
+
+    void fetch_data();
+    void clear_who_vectors();
+    void print_vectors();
+    void paintGL_graph();
+    void search_position_from_names(std::string node1name, std::string node2name, double * pos_1_x, double * pos_1_y, double * pos_2_x, double * pos_2_y);
+    int max_count_links();
+
+    void computeLayout();
+    void writeLabels();
+    void renderBitmapString(std::string txt, float x, float y);
+
+
+    QPoint click;
+    bool is_selection_mode_opengl;
+    long bufsize;
+    GLuint * selectBuf;
+    void startPicking(int x, int y);
+    void stopPicking();
+    void processHits2 (GLint hits, GLuint buffer[], int sw);
+    int selected_obj;
+
+};
+
+#endif // GRAPHVISUALIZER_H

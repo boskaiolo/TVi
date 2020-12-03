@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/backward.jpeg</file>
+        <file>images/forward.jpeg</file>
+        <file>images/Mollweide_Projection.png</file>
+        <file>images/Mollweide_Projection.jpg</file>
+        <file>images/Mollweide_Projection_yellow.jpg</file>
+        <file>images/icon.icns</file>
+        <file>images/etherape.png</file>
+        <file>images/wireshark.png</file>
+    </qresource>
+</RCC>

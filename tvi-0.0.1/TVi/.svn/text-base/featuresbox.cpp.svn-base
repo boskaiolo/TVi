@@ -1,0 +1,132 @@
+#include <QVBoxLayout>
+//#include <QComboBox>
+#include <QLabel>
+#include <QString>
+#include <QCheckBox>
+#include <QPalette>
+#include <QColor>
+#include <QButtonGroup>
+#include <QtGui>
+#include <QGroupBox>
+#include <QSpinBox>
+#include <iostream>
+
+
+#include "featuresbox.h"
+#include "colors.h"
+
+
+
+QCheckBox * create_qcheckbox (QString name, float r, float g, float b) {
+    QPalette p;
+    QColor c;
+
+    c.setRgbF(r,g,b);
+
+    QCheckBox * cb = new QCheckBox (name);
+    p.setColor(QPalette::WindowText, c);
+    cb->setPalette(p);
+    cb->setFont(QFont("Times", 14, QFont::Bold));
+
+
+
+    return cb;
+}
+
+
+
+FeaturesBox::FeaturesBox(QWidget * parent)
+    : QWidget(parent)
+{
+
+
+
+    this->setStyleSheet ("QCheckBox { background-color: black }");
+
+
+
+
+
+    tcp_sip = create_qcheckbox("TCP - SIP", COLOR_H_tcp_sip);
+    tcp_sport = create_qcheckbox("TCP - SPORT", COLOR_H_tcp_sport);
+    tcp_dip = create_qcheckbox("TCP - DIP", COLOR_H_tcp_dip);
+    tcp_dport = create_qcheckbox("TCP - DPORT", COLOR_H_tcp_dport);
+
+
+    udp_sip = create_qcheckbox("UDP - SIP", COLOR_H_udp_sip);
+    udp_sport = create_qcheckbox("UDP - SPORT", COLOR_H_udp_sport);
+    udp_dip = create_qcheckbox("UDP - DIP", COLOR_H_udp_dip);
+    udp_dport = create_qcheckbox("UDP - DPORT", COLOR_H_udp_dport);
+
+
+    icmp_sip = create_qcheckbox("ICMP - SIP", COLOR_H_icmp_sip);
+    icmp_dip = create_qcheckbox("ICMP - DIP", COLOR_H_icmp_dip);
+
+    anomaly = create_qcheckbox("ANOMALY S.", COLOR_H_anomaly);
+
+    n_basis =  new QSpinBox();
+    n_basis->setValue(3);
+    n_basis->setMinimum(1);
+    n_basis->setMaximum(10);
+
+    logscale = create_qcheckbox("LogLog hist", 1.0f, 1.0f, 1.0f);
+
+    QLabel * anomaly_basis_label = new QLabel("num. of PCA basis");
+
+
+    connect(tcp_sport, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_tcp_sport(int)));
+    connect(tcp_dport, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_tcp_dport(int)));
+    connect(tcp_sip, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_tcp_sip(int)));
+    connect(tcp_dip, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_tcp_dip(int)));
+
+    connect(udp_sport, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_udp_sport(int)));
+    connect(udp_dport, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_udp_dport(int)));
+    connect(udp_sip, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_udp_sip(int)));
+    connect(udp_dip, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_udp_dip(int)));
+
+    connect(icmp_sip, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_icmp_sip(int)));
+    connect(icmp_dip, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_icmp_dip(int)));
+
+    connect(anomaly, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_anomaly(int)));
+    connect(n_basis, SIGNAL(valueChanged(int)), this, SIGNAL(valueChanged_n_basis(int)));
+
+    connect(logscale, SIGNAL(stateChanged(int)), this, SIGNAL(valueChanged_log_hist(int)));
+
+
+    QHBoxLayout * anomaly_basis_layout = new QHBoxLayout();
+    anomaly_basis_layout->addWidget(anomaly_basis_label);
+    anomaly_basis_layout->addWidget(n_basis);
+
+
+    QVBoxLayout *layout = new QVBoxLayout();
+
+
+    layout->setSpacing(5);
+    layout->addWidget(tcp_sip);
+    layout->addWidget(tcp_sport);
+    layout->addWidget(tcp_dip);
+    layout->addWidget(tcp_dport);
+    layout->addSpacing(5);
+
+    layout->addWidget(udp_sip);
+    layout->addWidget(udp_sport);
+    layout->addWidget(udp_dip);
+    layout->addWidget(udp_dport);
+    layout->addSpacing(5);
+
+    layout->addWidget(icmp_sip);
+    layout->addWidget(icmp_dip);
+    layout->addSpacing(5);
+
+    layout->addWidget(anomaly);
+    layout->addLayout(anomaly_basis_layout);
+
+
+    layout->addSpacing(5);
+    layout->addWidget(logscale);
+
+    setLayout(layout);
+}
+
+
+

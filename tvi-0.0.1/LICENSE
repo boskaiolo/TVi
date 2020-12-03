@@ -1,0 +1,7 @@
+Please note that this version of TVi is provided "AS IS" with no warranty whatsoever (see the LICENSE file), is intended for purely experimental and research purposes, and should be considered alpha-quality.
+TVi is distributed under the classical GPL license (see it at http://www.gnu.org/licenses/gpl.html)
+
+
+Note:
+This software is linked and uses other libraries (suc as Opengl, qt, ogdf, mysql, ...). Each of them has its own license. Read them before using the application.
+

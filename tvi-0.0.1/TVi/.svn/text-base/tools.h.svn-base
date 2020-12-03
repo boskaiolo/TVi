@@ -1,0 +1,22 @@
+#ifndef TOOLS_H
+#define TOOLS_H
+
+
+#include <vector>
+
+
+int factorial(int number);
+char * int2str(int number);
+char * double2str(double number);
+void hsv2rgb(float h, float s, float v, float *r, float *g, float*b);
+void rgb2hsv(float r, float g, float b, float *h, float *s, float *v);
+std::string int2stdstr(int number);
+std::string float2stdstr(float number);
+double find_max (std::vector<double> *v) ;
+void HilbertMap(double in, double *xout, double *yout, int depth, int exit);
+
+#ifndef PI
+#define PI 3.14159265
+#endif
+
+#endif // TOOLS_H

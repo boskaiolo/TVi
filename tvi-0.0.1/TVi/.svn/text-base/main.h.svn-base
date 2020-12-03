@@ -1,0 +1,28 @@
+#ifndef MAIN_H
+#define MAIN_H
+
+
+
+#include <QWidget>
+
+
+
+class MyWidget : public QWidget
+{
+    Q_OBJECT
+
+public:
+    MyWidget(QWidget *parent = 0);
+
+
+public slots:
+    void tab_selection(int pos);
+
+signals:
+    void histogram_is_active(bool);
+    void graphview_is_active(bool);
+
+};
+
+
+#endif // MAIN_H
